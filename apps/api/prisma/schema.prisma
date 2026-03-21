@@ -1,0 +1,383 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  COMPANY
+  CUSTOMER
+}
+
+enum CompanyApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MembershipType {
+  TRIAL
+  PLUS
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+enum ListingType {
+  SERVICE
+  PRODUCT
+}
+
+enum ListingStatus {
+  OPEN
+  CLOSED
+  CANCELED
+}
+
+enum BidStatus {
+  ACTIVE
+  WITHDRAWN
+  WON
+  LOST
+}
+
+enum TenderStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  CANCELED
+}
+
+enum TenderBidStatus {
+  ACTIVE
+  WITHDRAWN
+  WON
+  LOST
+}
+
+enum TenderParticipantStatus {
+  JOINED
+  WITHDRAWN
+}
+
+enum SupportMessageStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  ARCHIVED
+}
+
+model User {
+  id                String            @id @default(cuid())
+  email             String            @unique
+  passwordHash      String
+  role              UserRole
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  customer          Customer?
+  company           Company?
+  approvedCompanies Company[]         @relation("CompanyApprovedBy")
+  reviewedDocuments CompanyDocument[] @relation("DocumentReviewedBy")
+  handledSupportMessages SupportMessage[] @relation("SupportHandledBy")
+  updatedSiteSettings SiteContentSetting[] @relation("SiteContentUpdatedBy")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  fullName  String
+  phone     String?
+  city      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listings Listing[]
+  tenders  Tender[]  @relation("CustomerTenders")
+}
+
+model Company {
+  id               String                @id @default(cuid())
+  userId           String                @unique
+  name             String
+  taxNumber        String?
+  city             String?
+  approvalStatus   CompanyApprovalStatus @default(PENDING)
+  approvalNote     String?
+  membershipType   MembershipType        @default(TRIAL)
+  trialEndsAt      DateTime?
+  approvedAt       DateTime?
+  approvedByUserId String?
+  rating           Float                 @default(0)
+  completedJobs    Int                   @default(0)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approvedByUser User?        @relation("CompanyApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  documents     CompanyDocument[]
+  sectors       CompanySector[]
+  competencies  CompanyCompetency[]
+  subscriptions Subscription[]
+  bids          Bid[]
+  matches       ListingMatch[]
+  tenderBids    TenderBid[]
+  tenderParticipations TenderParticipant[]
+}
+
+model Sector {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companies CompanySector[]
+  competencies SectorCompetency[]
+  listings  Listing[]
+}
+
+model Competency {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sectors   SectorCompetency[]
+  companies CompanyCompetency[]
+}
+
+model CompanySector {
+  id        String   @id @default(cuid())
+  companyId String
+  sectorId  String
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sector  Sector  @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, sectorId])
+}
+
+model CompanyCompetency {
+  id           String   @id @default(cuid())
+  companyId    String
+  competencyId String
+  createdAt    DateTime @default(now())
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, competencyId])
+}
+
+model SectorCompetency {
+  id           String   @id @default(cuid())
+  sectorId     String
+  competencyId String
+  createdAt    DateTime @default(now())
+
+  sector     Sector     @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([sectorId, competencyId])
+}
+
+model CompanyDocument {
+  id               String       @id @default(cuid())
+  companyId        String
+  fileUrl          String
+  docType          String
+  status           DocumentStatus @default(PENDING)
+  note             String?
+  reviewedByUserId String?
+  uploadedAt       DateTime     @default(now())
+  reviewedAt       DateTime?
+
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reviewedByUser User? @relation("DocumentReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+}
+
+model Package {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  price         Decimal  @db.Decimal(10, 2)
+  durationDays  Int
+  listingLimit  Int?
+  bidLimit      Int?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id         String             @id @default(cuid())
+  companyId  String
+  packageId  String
+  membershipType MembershipType @default(PLUS)
+  startsAt   DateTime
+  endsAt     DateTime
+  status     SubscriptionStatus @default(ACTIVE)
+  paymentReference String?
+  createdAt  DateTime           @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  package Package @relation(fields: [packageId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, status, endsAt])
+}
+
+model Listing {
+  id          String        @id @default(cuid())
+  customerId  String
+  sectorId    String
+  title       String
+  description String
+  listingType ListingType
+  city        String
+  budgetMin   Decimal?      @db.Decimal(10, 2)
+  budgetMax   Decimal?      @db.Decimal(10, 2)
+  status      ListingStatus @default(OPEN)
+  expiresAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sector   Sector        @relation(fields: [sectorId], references: [id], onDelete: Restrict)
+  bids     Bid[]
+  matches  ListingMatch[]
+  tender   Tender?
+
+  @@index([status, sectorId])
+}
+
+model Bid {
+  id          String    @id @default(cuid())
+  listingId   String
+  companyId   String
+  price       Decimal   @db.Decimal(10, 2)
+  deliveryDay Int?
+  note        String?
+  score       Float?
+  status      BidStatus @default(ACTIVE)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, companyId])
+  @@index([listingId, score])
+  @@index([companyId, status])
+}
+
+model Tender {
+  id         String       @id @default(cuid())
+  listingId  String       @unique
+  customerId String
+  status     TenderStatus @default(DRAFT)
+  startsAt   DateTime
+  endsAt     DateTime
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  listing  Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  customer Customer    @relation("CustomerTenders", fields: [customerId], references: [id], onDelete: Cascade)
+  bids     TenderBid[]
+  participants TenderParticipant[]
+
+  @@index([status, endsAt])
+}
+
+model ListingMatch {
+  id        String   @id @default(cuid())
+  listingId String
+  companyId String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, companyId])
+  @@index([companyId, createdAt])
+}
+
+model TenderBid {
+  id          String         @id @default(cuid())
+  tenderId    String
+  companyId   String
+  price       Decimal        @db.Decimal(10, 2)
+  deliveryDay Int?
+  note        String?
+  score       Float?
+  status      TenderBidStatus @default(ACTIVE)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  tender  Tender  @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([tenderId, companyId])
+  @@index([tenderId, score])
+}
+
+model TenderParticipant {
+  id        String                  @id @default(cuid())
+  tenderId  String
+  companyId String
+  status    TenderParticipantStatus @default(JOINED)
+  joinedAt  DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  tender  Tender  @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([tenderId, companyId])
+  @@index([companyId, status])
+}
+
+model SupportMessage {
+  id             String               @id @default(cuid())
+  name           String
+  email          String
+  phone          String?
+  subject        String?
+  message        String
+  status         SupportMessageStatus @default(NEW)
+  handledByUserId String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  handledByUser User? @relation("SupportHandledBy", fields: [handledByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+model SiteContentSetting {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  value           Json
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  updatedByUser User? @relation("SiteContentUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+}
