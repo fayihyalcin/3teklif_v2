@@ -10,8 +10,12 @@
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace @uc-teklif/api\" \"npm run dev --workspace @uc-teklif/web\"",
     "build": "npm run build --workspaces",
+    "build:api": "npm run build --workspace @uc-teklif/api",
+    "build:web": "npm run build --workspace @uc-teklif/web",
     "lint": "npm run lint --workspaces",
-    "format": "npm run format --workspaces"
+    "format": "npm run format --workspaces",
+    "prisma:generate:api": "npm run prisma:generate --workspace @uc-teklif/api",
+    "prisma:push:api": "npm run prisma:push --workspace @uc-teklif/api"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
