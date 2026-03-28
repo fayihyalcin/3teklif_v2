@@ -1,0 +1,9 @@
+RewriteEngine On
+
+# Let existing files and directories resolve normally.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Fallback all SPA routes to the Vite entrypoint.
+RewriteRule ^ index.html [L]
